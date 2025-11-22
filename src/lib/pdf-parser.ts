@@ -17,9 +17,16 @@ async function imageToOCR(filePath: string): Promise<string> {
     const {
       data: { text },
     } = await worker.recognize(filePath)
+    console.log(text)
+    const safeText = (text ?? '')
+      .toString()
+      .replaceAll('[', '|')
+      .replaceAll(']', '|')
+      .replaceAll('IR/D|', '|R/D|')
+      .replaceAll('Rubrical Nome Rubrica', 'Rubrical | Nome Rubrica')
+      .replaceAll('| MAT ', '| MAI ')
 
-    const safeText = (text ?? '').toString().replaceAll('[', '|').replaceAll(']', '|')
-
+    console.log(safeText)
     return safeText
   } catch (error) {
     console.error('Erro no OCR:', error)
@@ -67,13 +74,42 @@ function countPngFiles(dirPath: string): number {
 }
 
 function saveToTxt(lines: string[], outputPath: string) {
-  const content = lines.join('\n') // junta tudo com quebra de linha
+  // Quebra cada item do array em sublinhas usando '\n'
+  const exploded = lines.flatMap((line) => line.split('\n'))
+
+  // Filtra somente as linhas desejadas
+  const filtered = exploded.filter(
+    (line) => /^[0-9]{5}/.test(line) || /^Rubrica/.test(line) || /^\*/.test(line),
+  )
+
+  const tables = formatTable(filtered)
+
+  const content = tables.join('\n')
+  console.log(content)
   fs.writeFileSync(outputPath, content, 'utf-8')
+}
+
+function formatTable(lines: string[], separator: string = '|') {
+  const rows: string[][] = lines.map((line) => line.split(separator).map((col) => col.trim()))
+
+  // Calcula tamanho máximo de cada coluna
+  const colWidths: number[] = []
+  rows.forEach((cols: string[]) => {
+    cols.forEach((col: string, i: number) => {
+      colWidths[i] = Math.max(colWidths[i] || 0, col.length)
+    })
+  })
+
+  // Reconstrói a tabela com padding correto
+  return rows.map((cols: string[]) =>
+    cols.map((col: string, i: number) => col.padEnd(colWidths[i], ' ')).join(' | '),
+  )
 }
 
 async function oCRToTXT(__imgFolderPath: string, __outputTXTPath: string) {
   const rawText: string[] = []
-  const imgCount: number = countPngFiles(__imgFolderPath)
+  // const imgCount: number = countPngFiles(__imgFolderPath)
+  const imgCount: number = 1
 
   const bar = new SingleBar(
     {
@@ -108,21 +144,6 @@ async function main() {
   oCRToTXT(__imgFolderPath, __outputTXTPath)
   // readPDF(__inputFilePath)
   // pdfToImage(__inputFilePath)
-  //   const rawText: string[] = []
-  //   const imgCount: number = countPngFiles(__imgFolderPath)
-  //   for (let i = 0; i < imgCount; i++) {
-  //     const __imgFilePath = path.resolve(
-  //       __dirname,
-  //       '..',
-  //       'files',
-  //       'output',
-  //       'img',
-  //       `page${i + 1}.png`,
-  //     )
-  //     const text: string = await imageToOCR(__imgFilePath)
-  //     rawText.push(text)
-  //   }
-  //   saveToTxt(rawText, __outputTXTPath)
 }
 
 main()
